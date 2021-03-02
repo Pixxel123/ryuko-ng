@@ -50,6 +50,16 @@ class LogFileReader:
 
             system_info = specs_search(log_file)
 
+            def mods_information(log_file):
+                matches = re.findall(r"Found mod\s\'(.+?)\'\s(\[.+?\])", log_file)
+                if matches:
+                    mods = [{"mod": match[0], "status": match[1]} for match in matches]
+                    mods_status = [
+                        f"ℹ️ {i['mod']} ({'ExeFS' if i['status'] == '[E]' else 'RomFS'})"
+                        for i in mods
+                    ]
+                    return mods_status
+
             def generate_log_embed(author_id, log_info):
                 log_embed = discord.Embed(
                     title=f"{log_info['Game_Name']}", colour=discord.Colour(0x4A90E2)
@@ -69,18 +79,27 @@ class LogFileReader:
                         value=f"This log file appears to be empty. To get a proper log, follow these steps:\n 1) Start a game up.\n 2) Play until your issue occurs.\n 3) Upload your log file.",
                         inline=False,
                     )
+                # find information on installed mods
+                game_mods = mods_information(log_file)
+                if game_mods:
+                    log_embed.add_field(
+                        name="Mods", value="\n".join(game_mods), inline=False
+                    )
+
+                # find information on logs, whether defaults are enabled or not
                 default_logs = ["Info", "Warning", "Error", "Guest", "Stub"]
                 user_logs = (
                     log_info["Logs_Enabled"].rstrip().replace(" ", "").split(",")
                 )
                 disabled_logs = set(default_logs).difference(set(user_logs))
                 if disabled_logs:
-                    logs_warning = [
-                        f":warning: {log} log is not enabled." for log in disabled_logs
+                    logs_status = [
+                        f"⚠️ {log} log is not enabled" for log in disabled_logs
                     ]
-                    log_embed.add_field(
-                        name="Notes", value="\n".join(logs_warning), inline=False
-                    )
+                    log_string = "\n".join(logs_status)
+                else:
+                    log_string = "ℹ️ Default logs enabled"
+                log_embed.add_field(name="Notes", value=log_string, inline=False)
                 return log_embed
 
             return generate_log_embed(author, system_info)
