@@ -1,3 +1,4 @@
+from typing import Type
 import discord
 import re
 import aiohttp
@@ -10,7 +11,7 @@ class LogFileReader:
     async def download_file(self, log_url):
         async with aiohttp.ClientSession() as session:
             # grabs first and last 4kB of log file to prevent abuse from large files
-            headers = {"Range": "bytes=0-6000, -6000"}
+            headers = {"Range": "bytes=0-20000, -6000"}
             async with session.get(log_url, headers=headers) as response:
                 return await response.text()
 
@@ -51,7 +52,8 @@ class LogFileReader:
             system_info = specs_search(log_file)
 
             def mods_information(log_file):
-                matches = re.findall(r"Found mod\s\'(.+?)\'\s(\[.+?\])", log_file)
+                mods_regex = re.compile(r"Found mod\s\'(.+?)\'\s(\[.+?\])")
+                matches = re.findall(mods_regex, log_file)
                 if matches:
                     mods = [{"mod": match[0], "status": match[1]} for match in matches]
                     mods_status = [
@@ -66,12 +68,12 @@ class LogFileReader:
                 )
                 log_embed.set_footer(text=f"Log uploaded by {author_id}")
                 log_embed.add_field(
-                    name="Ryujinx Info",
-                    value=f"**Version:** {log_info['Ryu_Version']}\n**Firmware:** {log_info['Firmware']}",
-                )
-                log_embed.add_field(
                     name="Hardware Info",
                     value=f"**CPU:** {log_info['CPU']}\n**GPU:** {log_info['GPU']}\n**RAM:** {log_info['RAM']}\n**OS:** {log_info['OS']}",
+                )
+                log_embed.add_field(
+                    name="Ryujinx Info",
+                    value=f"**Version:** {log_info['Ryu_Version']}\n**Firmware:** {log_info['Firmware']}",
                 )
                 if log_info["Game_Name"] == "Unknown":
                     log_embed.add_field(
@@ -82,7 +84,9 @@ class LogFileReader:
 
                 def find_error_message(log_file):
                     error_regex = re.compile(
-                        r"\n?[\d:\.]+ \|E\| (.*\n.*)", re.MULTILINE
+                        # r"\n?[\d:\.]+ \|E\| (.*\n.*)", re.MULTILINE
+                        r"(\d{2}\:\d{2}\:\d{2}\.\d{3}.\|E\| .*\n.*)",
+                        re.MULTILINE,
                     )
                     for x in error_regex.finditer(log_file):
                         return x.group(1)
@@ -90,18 +94,33 @@ class LogFileReader:
                 # finds the first error denoted by |E| in the log and prints the first line to do with it
                 error_message = find_error_message(log_file)
                 if error_message:
-                    log_embed.add_field(
-                        name="Error Summary",
-                        value=f"```{error_message}```",
-                        inline=False,
-                    )
+                    error_info = f"```{error_message}```"
+                else:
+                    error_info = "No errors found in log"
+                log_embed.add_field(
+                    name="Error Summary",
+                    value=error_info,
+                    inline=False,
+                )
 
                 # find information on installed mods
                 game_mods = mods_information(log_file)
                 if game_mods:
-                    log_embed.add_field(
-                        name="Mods", value="\n".join(game_mods), inline=False
-                    )
+                    mods_info = "\n".join(game_mods)
+                else:
+                    mods_info = "No mods found"
+                log_embed.add_field(name="Mods", value=mods_info, inline=False)
+                # generic checks to notify user about
+                notes = []
+
+                try:
+                    ram_avaliable_regex = re.compile(r"Available\s(\d+)(?=\sMB)")
+                    ram_avaliable = re.search(ram_avaliable_regex, log_file)[1]
+                    if int(ram_avaliable) < 8000:
+                        ram_warning = f"⚠️ less than 8GB RAM avaliable"
+                        notes.append(ram_warning)
+                except TypeError:
+                    pass
 
                 # find information on logs, whether defaults are enabled or not
                 default_logs = ["Info", "Warning", "Error", "Guest", "Stub"]
@@ -116,7 +135,12 @@ class LogFileReader:
                     log_string = "\n".join(logs_status)
                 else:
                     log_string = "ℹ️ Default logs enabled"
-                log_embed.add_field(name="Notes", value=log_string, inline=False)
+                notes.append(log_string)
+                log_embed.add_field(
+                    name="Notes",
+                    value="\n".join([note for note in notes]),
+                    inline=False,
+                )
                 return log_embed
 
             return generate_log_embed(author, system_info)
