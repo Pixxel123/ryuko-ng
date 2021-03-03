@@ -79,6 +79,23 @@ class LogFileReader:
                         value=f"This log file appears to be empty. To get a proper log, follow these steps:\n 1) Start a game up.\n 2) Play until your issue occurs.\n 3) Upload your log file.",
                         inline=False,
                     )
+
+                def find_error_message(log_file):
+                    error_regex = re.compile(
+                        r"\n?[\d:\.]+ \|E\| (.*\n.*)", re.MULTILINE
+                    )
+                    for x in error_regex.finditer(log_file):
+                        return x.group(1)
+
+                # finds the first error denoted by |E| in the log and prints the first line to do with it
+                error_message = find_error_message(log_file)
+                if error_message:
+                    log_embed.add_field(
+                        name="Error Summary",
+                        value=f"```{error_message}```",
+                        inline=False,
+                    )
+
                 # find information on installed mods
                 game_mods = mods_information(log_file)
                 if game_mods:
