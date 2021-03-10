@@ -20,10 +20,24 @@ class LogFileReader(Cog):
             async with session.get(log_url, headers=headers) as response:
                 return await response.text("UTF-8")
 
+    async def create_log_pastebin(self, log_file):
+        async with aiohttp.ClientSession() as session:
+            pastebin_url = "https://pastebin.com/api/api_post.php"
+            data = {
+                "api_dev_key": config.pastebin_key,
+                "api_paste_code": log_file,
+                "api_option": "paste",
+                "api_paste_private": "1",
+            }
+            res = await session.post(pastebin_url, data=data)
+            return await res.text()
+
     async def log_file_read(self, message):
         attached_log = message.attachments[0]
         author = f"@{message.author.name}"
         log_file = await self.download_file(attached_log.url)
+        # For those on mobile or with a data cap, a link to a pastebin could be quite useful
+        log_file_view_link = await self.create_log_pastebin(log_file)
 
         regex_map = {
             "Ryu_Version": "Ryujinx Version",
@@ -73,7 +87,7 @@ class LogFileReader(Cog):
             )
             log_embed.add_field(
                 name="Ryujinx Info",
-                value=f"**Version:** {log_info['Ryu_Version']}\n**Firmware:** {log_info['Firmware']}",
+                value=f"**Version:** {log_info['Ryu_Version']}\n**Firmware:** {log_info['Firmware']}\n [View full log]({log_file_view_link})",
             )
             if log_info["Game_Name"] == "Unknown":
                 log_embed.add_field(
