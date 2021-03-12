@@ -38,6 +38,8 @@ class LogFileReader(Cog):
         log_file = await self.download_file(attached_log.url)
         # For those on mobile or with a data cap, a link to a pastebin could be quite useful
         log_file_view_link = await self.create_log_pastebin(log_file)
+        # Using the raw version of the file loads a lot faster
+        log_file_view_link = log_file_view_link.replace(".com/", ".com/raw/")
 
         regex_map = {
             "Ryu_Version": "Ryujinx Version",
